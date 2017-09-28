@@ -1,0 +1,382 @@
+configure(allprojects) { project ->
+
+  ext {
+    vertxVersion = "3.4.1"
+    mysqlVersion = "6.0.5"
+    log4jVersion = "2.8"
+    mainVerticle = "1"
+  }
+
+  apply plugin: 'java'
+
+  repositories {
+  	mavenCentral()
+    jcenter()
+  }
+
+  dependencies {
+    compile("io.vertx:vertx-core:${vertxVersion}")
+    compile("io.vertx:vertx-rx-java:${vertxVersion}")
+    compile("io.vertx:vertx-web:${vertxVersion}")
+    compile("io.vertx:vertx-service-proxy:${vertxVersion}")
+    compile("io.vertx:vertx-sockjs-service-proxy:${vertxVersion}")
+    compile("io.vertx:vertx-hazelcast:${vertxVersion}")
+    compileOnly("io.vertx:vertx-lang-js:${vertxVersion}")
+    compileOnly("io.vertx:vertx-codegen:${vertxVersion}")
+
+	/*-- Microservice toolbox --*/
+    compile("io.vertx:vertx-service-discovery:${vertxVersion}")
+    compile("io.vertx:vertx-circuit-breaker:${vertxVersion}")
+    compile("io.vertx:vertx-config:${vertxVersion}")
+    compile("io.vertx:vertx-health-check:${vertxVersion}")
+	
+	/*-- Logging dependencies --*/
+    compile("org.slf4j:slf4j-api:1.7.22")
+    compile("org.apache.logging.log4j:log4j-api:${log4jVersion}")
+    compile("org.apache.logging.log4j:log4j-core:${log4jVersion}")
+    compile("org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}")
+    compile("biz.paluch.logging:logstash-gelf:1.11.0")
+	
+    testCompile("io.vertx:vertx-unit:${vertxVersion}")
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+    testCompile("org.assertj:assertj-core:3.6.2")
+    testCompile("com.jayway.awaitility:awaitility:1.7.0")
+    testCompile("io.rest-assured:rest-assured:3.0.2")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs += 'src/main/generated'
+      }
+    }
+  }
+
+// compileOnly requires Gradle 2.12+
+task annotationProcessing(type: JavaCompile, group: 'build') {
+  source = sourceSets.main.java
+  classpath = configurations.compile + configurations.compileOnly
+  destinationDir = project.file('src/main/generated')
+  options.compilerArgs = [
+    "-proc:only",
+    "-processor", "io.vertx.codegen.CodeGenProcessor",
+    "-Acodegen.output=${destinationDir.absolutePath}"
+  ]
+}
+
+task taskA (type: JavaCompile, group: 'build') {
+println "${vertxVersion}"
+//println "${mainVerticle}"
+println project.name
+println project(":v-api-gateway").ext.mainVerticle
+}
+
+  compileJava {
+    targetCompatibility = 1.8
+    sourceCompatibility = 1.8
+    
+    dependsOn annotationProcessing
+    dependsOn taskA
+  }
+}
+
+/*-- infrastructure components --*/
+
+project("v-api-gateway") {
+ ext {
+   mainVerticle = "io.vertx.blueprint.microservice.account.UserAccountVerticle"
+  }
+
+  dependencies {
+    //compile(project(":kue-core"))
+    compile("io.vertx:vertx-web:${vertxVersion}")
+    compile("io.vertx:vertx-web-templ-jade:${vertxVersion}")
+  }
+
+  jar {
+    archiveName = 'v-api-gateway.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.http.KueHttpVerticle'
+    }
+  }
+}
+
+project("v-microservice-blueprint-common") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-microservice-blueprint-common.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-database-middleware") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-database-middleware.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+
+/*-- service components --*/
+project("v-account-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    compile("io.vertx:vertx-redis-client:${vertxVersion}")
+    compile("io.vertx:vertx-service-proxy:${vertxVersion}")
+  }
+
+  jar {
+    archiveName = 'v-account-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.queue.KueVerticle'
+    }
+  }
+
+  compileJava {
+    targetCompatibility = 1.8
+    sourceCompatibility = 1.8
+  }
+}
+
+project("v-cache-infrastructure") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-cache-infrastructure.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+
+project("v-inventory-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-inventory-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+
+project("v-monitor-dashboard") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-monitor-dashboard.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-order-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-order-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-payment-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-payment-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-product-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-product-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-recommendation-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-recommendation-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+project("v-shopping-cart-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-shopping-cart-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-shopping-ui") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-shopping-ui.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+project("v-store-microservice") {
+
+  ext {
+    mainVerticle = "2"
+  }
+  dependencies {
+    //compile(project(":kue-core"))
+  }
+
+  jar {
+    archiveName = 'v-store-microservice.jar'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    manifest {
+      attributes 'Main-Class': 'io.vertx.core.Launcher'
+      attributes 'Main-Verticle': 'io.vertx.blueprint.kue.example.LearningVertxVerticle'
+    }
+  }
+}
+
+task wrapper(type: Wrapper) {
+  gradleVersion = '3.4'
+}
+
+
+/*
+include 'account-microservice'
+include 'api-gateway'
+include 'cache-infrastructure'
+include 'database-middleware'
+include 'inventory-microservice'
+include 'microservice-blueprint-common'
+include 'monitor-dashboard'
+include 'order-microservice'
+include 'payment-microservice'
+include 'product-microservice'
+include 'recommendation-microservice'
+include 'shopping-cart-microservice'
+include 'shopping-ui'
+include 'store-microservice'
+*/
